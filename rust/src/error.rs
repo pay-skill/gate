@@ -24,7 +24,7 @@ impl GateError {
             GateError::PaymentRequired { payment_required_header, body, content_type } => {
                 let mut resp = Response::new(Full::new(Bytes::from(body)));
                 *resp.status_mut() = StatusCode::PAYMENT_REQUIRED;
-                resp.headers_mut().insert("PAYMENT-REQUIRED", payment_required_header.parse().unwrap());
+                resp.headers_mut().insert("payment-required", payment_required_header.parse().unwrap());
                 resp.headers_mut().insert("content-type", content_type.parse().unwrap());
                 resp
             }

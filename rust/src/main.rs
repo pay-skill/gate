@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -303,18 +303,18 @@ async fn proxy_to_origin(
     match decision {
         GateDecision::ProxyFree => {}
         GateDecision::ProxyAllowlisted { agent } => {
-            req.headers_mut().insert("X-Pay-Verified", "allowlisted".parse().unwrap());
-            req.headers_mut().insert("X-Pay-From", agent.parse().unwrap());
+            req.headers_mut().insert("x-pay-verified", "allowlisted".parse().unwrap());
+            req.headers_mut().insert("x-pay-from", agent.parse().unwrap());
         }
         GateDecision::ProxyVerified { from, amount, settlement, tab, .. } => {
-            req.headers_mut().insert("X-Pay-Verified", "true".parse().unwrap());
-            req.headers_mut().insert("X-Pay-Amount", amount.parse().unwrap());
-            req.headers_mut().insert("X-Pay-Settlement", settlement.parse().unwrap());
+            req.headers_mut().insert("x-pay-verified", "true".parse().unwrap());
+            req.headers_mut().insert("x-pay-amount", amount.parse().unwrap());
+            req.headers_mut().insert("x-pay-settlement", settlement.parse().unwrap());
             if let Some(f) = from {
-                req.headers_mut().insert("X-Pay-From", f.parse().unwrap());
+                req.headers_mut().insert("x-pay-from", f.parse().unwrap());
             }
             if let Some(t) = tab {
-                req.headers_mut().insert("X-Pay-Tab", t.parse().unwrap());
+                req.headers_mut().insert("x-pay-tab", t.parse().unwrap());
             }
         }
         GateDecision::Respond(_) => unreachable!(),
@@ -330,7 +330,7 @@ async fn proxy_to_origin(
 
     // Add receipt header if present
     if let GateDecision::ProxyVerified { receipt: Some(ref r), .. } = decision {
-        final_resp.headers_mut().insert("PAYMENT-RESPONSE", r.parse().unwrap());
+        final_resp.headers_mut().insert("payment-response", r.parse().unwrap());
     }
 
     Ok(final_resp)

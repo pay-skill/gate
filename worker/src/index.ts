@@ -183,7 +183,7 @@ function make402(
   env: Env,
   price: string,
   settlement: "direct" | "tab",
-  accept: string | null,
+  accept: string | null | undefined,
   reason?: string,
 ): Response {
   const reqs: PaymentRequirements = {
@@ -202,7 +202,7 @@ async function handlePaidRequest(
   env: Env,
   match: Extract<import("./types").RouteMatch, { kind: "paid" }>,
   paymentSig: string | null | undefined,
-  accept: string | null,
+  accept: string | null | undefined,
 ): Promise<Response> {
   if (!paymentSig) {
     return make402(env, match.price, match.settlement, accept);

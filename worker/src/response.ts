@@ -37,7 +37,7 @@ export function build402Html(price: string): string {
 /**
  * Check if request accepts HTML (browser detection).
  */
-export function wantsHtml(accept: string | null): boolean {
+export function wantsHtml(accept: string | null | undefined): boolean {
   if (!accept) return false;
   return accept.includes("text/html") && !accept.includes("application/json");
 }
@@ -48,7 +48,7 @@ export function wantsHtml(accept: string | null): boolean {
 export function make402Response(
   reqs: PaymentRequirements,
   price: string,
-  accept: string | null,
+  accept: string | null | undefined,
   reason?: string,
 ): Response {
   const header = buildPaymentRequiredHeader(reqs);

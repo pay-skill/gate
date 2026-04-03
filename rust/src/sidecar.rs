@@ -35,7 +35,7 @@ pub async fn handle_check(
     let route_match = state.matcher.match_route(original_uri, original_method, agent);
 
     match route_match {
-        RouteMatch::Free => ok_with_header("X-Pay-Verified", "free"),
+        RouteMatch::Free => ok_verified("free"),
 
         RouteMatch::Passthrough => ok_empty(),
 
@@ -43,12 +43,12 @@ pub async fn handle_check(
 
         RouteMatch::Allowlisted { ref agent } => {
             let mut resp = ok_empty();
-            resp.headers_mut().insert("X-Pay-Verified", "allowlisted".parse().unwrap());
-            resp.headers_mut().insert("X-Pay-From", agent.parse().unwrap());
+            resp.headers_mut().insert("x-pay-verified", "allowlisted".parse().unwrap());
+            resp.headers_mut().insert("x-pay-from", agent.parse().unwrap());
             resp
         }
 
-        RouteMatch::Paid { route, price, settlement } => {
+        RouteMatch::Paid { route: _, price, settlement } => {
             handle_paid_check(state, &price, settlement, payment_sig, req).await
         }
     }
@@ -82,7 +82,7 @@ async fn handle_paid_check(
 
     let Some(result) = result else {
         return match state.config.fail_mode {
-            crate::config::FailMode::Open => ok_with_header("X-Pay-Verified", "free"),
+            crate::config::FailMode::Open => ok_verified("free"),
             crate::config::FailMode::Closed => GateError::ServiceUnavailable.into_response(),
         };
     };
@@ -95,14 +95,14 @@ async fn handle_paid_check(
     }
 
     let mut resp = ok_empty();
-    resp.headers_mut().insert("X-Pay-Verified", "true".parse().unwrap());
-    resp.headers_mut().insert("X-Pay-Amount", amount.parse().unwrap());
-    resp.headers_mut().insert("X-Pay-Settlement", settlement_str.parse().unwrap());
+    resp.headers_mut().insert("x-pay-verified", "true".parse().unwrap());
+    resp.headers_mut().insert("x-pay-amount", amount.parse().unwrap());
+    resp.headers_mut().insert("x-pay-settlement", settlement_str.parse().unwrap());
     if let Some(ref f) = result.from {
-        resp.headers_mut().insert("X-Pay-From", f.parse().unwrap());
+        resp.headers_mut().insert("x-pay-from", f.parse().unwrap());
     }
     if let Some(ref t) = result.tab {
-        resp.headers_mut().insert("X-Pay-Tab", t.parse().unwrap());
+        resp.headers_mut().insert("x-pay-tab", t.parse().unwrap());
     }
     resp
 }
@@ -111,8 +111,8 @@ fn ok_empty() -> Response<Full<Bytes>> {
     Response::new(Full::new(Bytes::new()))
 }
 
-fn ok_with_header(key: &str, val: &str) -> Response<Full<Bytes>> {
+fn ok_verified(val: &str) -> Response<Full<Bytes>> {
     let mut resp = Response::new(Full::new(Bytes::new()));
-    resp.headers_mut().insert(key, val.parse().unwrap());
+    resp.headers_mut().insert("x-pay-verified", val.parse().unwrap());
     resp
 }
