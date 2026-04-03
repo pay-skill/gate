@@ -28,6 +28,7 @@ pub struct VerifyRequirements {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct VerifyResponse {
     pub valid: bool,
     pub reason: Option<String>,

@@ -4,6 +4,7 @@ use std::path::Path;
 /// Top-level config, parsed from YAML + env overrides.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 pub struct Config {
     pub version: u32,
     pub provider_address: String,
@@ -22,6 +23,7 @@ pub struct Config {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 pub struct ProxyConfig {
     pub target: String,
     #[serde(default = "default_timeout")]
@@ -96,6 +98,7 @@ fn default_verification() -> String { "100/s".to_string() }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 pub struct LogConfig {
     #[serde(default = "default_log_level")]
     pub level: String,

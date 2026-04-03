@@ -5,6 +5,7 @@ use serde_json::json;
 
 /// Structured error types for pay-gate responses.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum GateError {
     PaymentRequired {
         payment_required_header: String,

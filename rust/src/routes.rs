@@ -51,7 +51,7 @@ impl RouteMatcher {
     }
 
     /// Match a request path + method against routes. First match wins.
-    pub fn match_route(&self, path: &str, method: &str, agent: Option<&str>) -> RouteMatch {
+    pub fn match_route<'a>(&'a self, path: &str, method: &str, agent: Option<&str>) -> RouteMatch<'a> {
         // Check global allowlist
         if let Some(addr) = agent {
             if self.global_allowlist.contains(&addr.to_lowercase()) {
