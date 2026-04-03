@@ -62,17 +62,12 @@ pub enum DefaultAction {
     Block,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum FailMode {
+    #[default]
     Closed,
     Open,
-}
-
-impl Default for FailMode {
-    fn default() -> Self {
-        FailMode::Closed
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

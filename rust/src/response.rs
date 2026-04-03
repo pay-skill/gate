@@ -48,7 +48,7 @@ pub fn build_402(
     };
 
     let header_value = BASE64.encode(serde_json::to_string(&reqs).unwrap());
-    let wants_html = accept.map_or(false, |a| a.contains("text/html") && !a.contains("application/json"));
+    let wants_html = accept.is_some_and(|a| a.contains("text/html") && !a.contains("application/json"));
 
     if wants_html {
         let html = build_402_html(price_display);
