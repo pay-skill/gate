@@ -1,0 +1,36 @@
+# pay-gate sidecar configuration for Caddy
+#
+# Prerequisites:
+#   pay-gate start --sidecar  (listening on 127.0.0.1:8402)
+
+api.example.com {
+	# Gate all /api/ routes through pay-gate
+	@api path /api/*
+	handle @api {
+		forward_auth localhost:8402 {
+			uri /__pay/check
+			header_up X-Original-URI {uri}
+			header_up X-Original-Method {method}
+			header_up PAYMENT-SIGNATURE {header.PAYMENT-SIGNATURE}
+			copy_headers {
+				X-Pay-Verified
+				X-Pay-From
+				X-Pay-Amount
+				X-Pay-Settlement
+				X-Pay-Tab
+				PAYMENT-REQUIRED
+			}
+		}
+		reverse_proxy localhost:8080
+	}
+
+	# Health — direct to origin, no payment
+	handle /health {
+		reverse_proxy localhost:8080
+	}
+
+	# Everything else — direct to origin
+	handle {
+		reverse_proxy localhost:8080
+	}
+}
