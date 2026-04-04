@@ -1,0 +1,43 @@
+# pay-gate sidecar configuration for Traefik
+#
+# Prerequisites:
+#   pay-gate start --sidecar  (listening on 127.0.0.1:8402)
+#
+# Add this to your Traefik dynamic configuration file.
+
+http:
+  middlewares:
+    pay-gate:
+      forwardAuth:
+        address: "http://127.0.0.1:8402/__pay/check"
+        authRequestHeaders:
+          - "PAYMENT-SIGNATURE"
+          - "X-Pay-Agent"
+        authResponseHeaders:
+          - "X-Pay-Verified"
+          - "X-Pay-From"
+          - "X-Pay-Amount"
+          - "X-Pay-Settlement"
+          - "X-Pay-Tab"
+          - "PAYMENT-REQUIRED"
+
+  routers:
+    api-paid:
+      rule: "Host(`api.example.com`) && PathPrefix(`/api/`)"
+      middlewares:
+        - pay-gate
+      service: api-origin
+      entryPoints:
+        - websecure
+
+    api-health:
+      rule: "Host(`api.example.com`) && Path(`/health`)"
+      service: api-origin
+      entryPoints:
+        - websecure
+
+  services:
+    api-origin:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:8080"

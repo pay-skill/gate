@@ -1,0 +1,91 @@
+# pay-gate sidecar configuration for Envoy
+#
+# Prerequisites:
+#   pay-gate start --sidecar  (listening on 127.0.0.1:8402)
+#
+# Add the ext_authz filter to your Envoy HTTP connection manager.
+
+static_resources:
+  listeners:
+    - name: api_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 443
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: api
+                route_config:
+                  name: api_routes
+                  virtual_hosts:
+                    - name: api
+                      domains: ["api.example.com"]
+                      routes:
+                        - match:
+                            prefix: "/api/"
+                          route:
+                            cluster: origin
+                        - match:
+                            prefix: "/health"
+                          route:
+                            cluster: origin
+                http_filters:
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      http_service:
+                        server_uri:
+                          uri: "127.0.0.1:8402"
+                          cluster: pay_gate
+                          timeout: 5s
+                        path_prefix: "/__pay/check"
+                        authorization_request:
+                          headers_to_add:
+                            - key: "X-Original-URI"
+                              value: "%REQ(:PATH)%"
+                            - key: "X-Original-Method"
+                              value: "%REQ(:METHOD)%"
+                          allowed_headers:
+                            patterns:
+                              - exact: "payment-signature"
+                        authorization_response:
+                          allowed_upstream_headers:
+                            patterns:
+                              - exact: "x-pay-verified"
+                              - exact: "x-pay-from"
+                              - exact: "x-pay-amount"
+                              - exact: "x-pay-settlement"
+                              - exact: "x-pay-tab"
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: origin
+      connect_timeout: 5s
+      type: STRICT_DNS
+      load_assignment:
+        cluster_name: origin
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 8080
+
+    - name: pay_gate
+      connect_timeout: 2s
+      type: STRICT_DNS
+      load_assignment:
+        cluster_name: pay_gate
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 8402
