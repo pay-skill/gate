@@ -3,6 +3,7 @@ name: Acceptance Tests
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   test-rust:
