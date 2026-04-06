@@ -182,9 +182,13 @@ async fn run_server(
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = TcpListener::bind(addr).await.expect("Failed to bind");
+    let network_name = match mode {
+        GateMode::Production => "mainnet (eip155:8453)",
+        _ => "testnet (eip155:84532)",
+    };
     tracing::info!(
-        "pay-gate {} listening on {} (mode: {:?}, origin: {})",
-        "0.1.0", addr, mode, config.proxy.target
+        "pay-gate {} listening on {} (mode: {:?}, network: {}, origin: {})",
+        "0.1.0", addr, mode, network_name, config.proxy.target
     );
 
     // Build hyper client for proxying

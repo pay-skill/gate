@@ -48,6 +48,26 @@ pub async fn verify_payment(
     let payment_payload: serde_json::Value =
         serde_json::from_slice(&payment_bytes).ok()?;
 
+    // Network enforcement: reject payment signed for the wrong chain before
+    // hitting the facilitator. Catches testnet-vs-mainnet mismatches at the edge.
+    let expected_network = &requirements.network;
+    let payload_network = payment_payload["accepted"]["network"].as_str();
+    if let Some(net) = payload_network {
+        if net != expected_network {
+            tracing::warn!(
+                expected = %expected_network, got = %net,
+                "Payment signed for wrong network"
+            );
+            return Some(VerifyResponseV2 {
+                is_valid: false,
+                invalid_reason: Some(format!(
+                    "wrong network: expected {expected_network}, got {net}"
+                )),
+                payer: None,
+            });
+        }
+    }
+
     let body = VerifyRequestV2 {
         x402_version: 2,
         payment_payload,

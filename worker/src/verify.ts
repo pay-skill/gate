@@ -12,11 +12,24 @@ export async function verifyPayment(
   paymentHeader: string,
   requirements: PaymentRequirementsV2,
 ): Promise<VerifyResponseV2 | null> {
-  let paymentPayload: unknown;
+  let paymentPayload: Record<string, unknown>;
   try {
-    paymentPayload = JSON.parse(atob(paymentHeader));
+    paymentPayload = JSON.parse(atob(paymentHeader)) as Record<string, unknown>;
   } catch {
     return null;
+  }
+
+  // Network enforcement: reject payment signed for the wrong chain before
+  // hitting the facilitator. Catches testnet-vs-mainnet mismatches at the edge.
+  const accepted = paymentPayload.accepted as Record<string, unknown> | undefined;
+  if (accepted?.network && accepted.network !== requirements.network) {
+    console.warn(
+      `Payment signed for wrong network: expected ${requirements.network}, got ${accepted.network}`,
+    );
+    return {
+      isValid: false,
+      invalidReason: `wrong network: expected ${requirements.network}, got ${String(accepted.network)}`,
+    };
   }
 
   const body: VerifyRequestV2 = {
