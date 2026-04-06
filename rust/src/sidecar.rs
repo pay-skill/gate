@@ -14,10 +14,16 @@ pub async fn handle_check(
     state: &GateState,
     req: &Request<hyper::body::Incoming>,
 ) -> Response<Full<Bytes>> {
-    let original_uri = req.headers()
+    let original_uri_raw = req.headers()
         .get("x-original-uri")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("/");
+    // Parse as URI to extract path only — matches gate.rs behavior (req.uri().path()).
+    // Handles query strings, fragments, and percent-encoding consistently.
+    let parsed_uri: Option<hyper::Uri> = original_uri_raw.parse().ok();
+    let original_uri = parsed_uri.as_ref()
+        .map(|u| u.path())
+        .unwrap_or(original_uri_raw);
     let original_method = req.headers()
         .get("x-original-method")
         .and_then(|v| v.to_str().ok())
@@ -43,7 +49,7 @@ pub async fn handle_check(
         }
         RouteMatch::Paid { route: _, price, settlement } => {
             handle_paid_check(
-                state, &price, settlement, payment_sig, req, original_uri,
+                state, &price, settlement, payment_sig, req, original_uri_raw,
             ).await
         }
     }
