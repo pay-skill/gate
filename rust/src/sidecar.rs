@@ -14,13 +14,16 @@ pub async fn handle_check(
     state: &GateState,
     req: &Request<hyper::body::Incoming>,
 ) -> Response<Full<Bytes>> {
-    // Support both nginx (X-Original-URI) and Traefik (X-Forwarded-Uri) conventions.
-    // Also fall back to the request URI itself (Traefik sends the original path).
+    // Support nginx (X-Original-URI), Traefik (X-Forwarded-Uri), and Envoy
+    // (path_prefix appends original path after /__pay/check).
+    let req_path = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    // Envoy path_prefix: /__pay/check/weather?q=X → strip prefix to get /weather?q=X
+    let envoy_fallback = req_path.strip_prefix("/__pay/check").unwrap_or(req_path);
     let original_uri_raw = req.headers()
         .get("x-original-uri")
         .or_else(|| req.headers().get("x-forwarded-uri"))
         .and_then(|v| v.to_str().ok())
-        .unwrap_or_else(|| req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/"));
+        .unwrap_or(envoy_fallback);
     // Parse as URI to extract path only — matches gate.rs behavior (req.uri().path()).
     // Handles query strings, fragments, and percent-encoding consistently.
     let parsed_uri: Option<hyper::Uri> = original_uri_raw.parse().ok();
