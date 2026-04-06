@@ -48,13 +48,13 @@ async function handle(r) {
     }
 
     // Step 4: 2xx — request is authorized, proxy to origin
-    // Build origin request with pay headers from the check response
-    var opts = {
+    // Subrequest the original URI (not /__origin) so the origin sees the real path.
+    // The /__origin_proxy location uses regex to strip the prefix and proxy correctly.
+    var origin = await r.subrequest('/__origin_proxy' + r.uri, {
         method: r.method,
         args: r.variables.args,
         body: r.requestBody || ''
-    };
-    var origin = await r.subrequest('/__origin', opts);
+    });
 
     // Forward origin response headers
     for (var key in origin.headersOut) {
