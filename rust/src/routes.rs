@@ -113,6 +113,7 @@ mod tests {
             rate_limits: RateLimits::default(),
             fail_mode: FailMode::Closed,
             log: LogConfig::default(),
+            discovery: None,
         }
     }
 
