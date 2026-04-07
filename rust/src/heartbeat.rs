@@ -13,6 +13,7 @@ use crate::config::{Config, DiscoveryConfig, GateMode, Settlement};
 #[derive(Serialize)]
 struct HeartbeatPayload {
     domain: String,
+    base_url: String,
     provider_address: String,
     name: String,
     description: String,
@@ -34,7 +35,7 @@ struct HeartbeatRoute {
 }
 
 fn build_payload(config: &Config, discovery: &DiscoveryConfig) -> Option<HeartbeatPayload> {
-    let domain = crate::gate::extract_domain(&config.proxy.target)?;
+    let domain = crate::gate::extract_domain(&discovery.base_url)?;
 
     let routes: Vec<HeartbeatRoute> = config
         .routes
@@ -61,6 +62,7 @@ fn build_payload(config: &Config, discovery: &DiscoveryConfig) -> Option<Heartbe
 
     Some(HeartbeatPayload {
         domain,
+        base_url: discovery.base_url.clone(),
         provider_address: config.provider_address.clone(),
         name: discovery.name.clone(),
         description: discovery.description.clone(),
