@@ -202,9 +202,10 @@ fn validate_config(config: &Config) -> Result<(), String> {
 
     if let Some(ref disc) = config.discovery {
         if disc.discoverable {
-            if disc.base_url.is_empty() || !disc.base_url.starts_with("https://") {
-                return Err("discovery.base_url: required, must use HTTPS".to_string());
+            if disc.base_url.is_empty() {
+                return Err("discovery.base_url: required".to_string());
             }
+            validate_url(&disc.base_url, "discovery.base_url")?;
             if disc.name.is_empty() || disc.name.len() > 60 {
                 return Err("discovery.name: required, max 60 chars".to_string());
             }
