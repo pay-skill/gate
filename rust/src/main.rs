@@ -5,6 +5,7 @@ mod error;
 mod gate;
 mod health;
 mod heartbeat;
+mod manifest;
 mod proxy;
 mod rate_limit;
 mod response;
@@ -262,6 +263,9 @@ async fn dispatch(
     // Internal endpoints — not proxied, not rate limited
     if path == "/__pay/health" && method == hyper::Method::GET {
         return Ok(health::handle_health(state).await);
+    }
+    if path == "/__pay/manifest" && method == hyper::Method::GET {
+        return Ok(manifest::handle_manifest(state));
     }
     if (path == "/__pay/check" || path.starts_with("/__pay/check/"))
         && (method == hyper::Method::POST || method == hyper::Method::GET)
