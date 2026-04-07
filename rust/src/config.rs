@@ -28,6 +28,9 @@ pub struct Config {
 pub struct DiscoveryConfig {
     #[serde(default = "default_discoverable")]
     pub discoverable: bool,
+    /// Public base URL of this gate (e.g. "https://weather.example.com").
+    /// Agents use this + route paths to construct request URLs.
+    pub base_url: String,
     pub name: String,
     pub description: String,
     #[serde(default)]
@@ -199,6 +202,9 @@ fn validate_config(config: &Config) -> Result<(), String> {
 
     if let Some(ref disc) = config.discovery {
         if disc.discoverable {
+            if disc.base_url.is_empty() || !disc.base_url.starts_with("https://") {
+                return Err("discovery.base_url: required, must use HTTPS".to_string());
+            }
             if disc.name.is_empty() || disc.name.len() > 60 {
                 return Err("discovery.name: required, max 60 chars".to_string());
             }
