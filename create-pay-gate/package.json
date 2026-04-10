@@ -1,6 +1,6 @@
 {
   "name": "create-pay-gate",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Create a pay-gate x402 payment gateway for Cloudflare Workers",
   "type": "module",
   "bin": {
