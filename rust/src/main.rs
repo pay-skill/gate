@@ -90,7 +90,7 @@ async fn main() {
             println!("pay-gate 0.1.0");
         }
         Command::Init => {
-            let example = include_str!("../../pay-gate.example.yaml");
+            let example = include_str!("../pay-gate.example.yaml");
             std::fs::write("pay-gate.yaml", example).expect("Failed to write pay-gate.yaml");
             println!("Created pay-gate.yaml — edit it with your provider address, origin, and routes.");
         }

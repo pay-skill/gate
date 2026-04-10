@@ -1,0 +1,56 @@
+version: 1
+
+# IMPORTANT: Network is determined by the start command:
+#   pay-gate start  → mainnet (real USDC, chain 8453)
+#   pay-gate dev    → testnet (worthless test USDC, chain 84532)
+#
+# Using `dev` in production means accepting worthless tokens for real API calls.
+# Always use `pay-gate start` for production deployments.
+
+provider_address: "0x1234567890abcdef1234567890abcdef12345678"
+
+proxy:
+  target: "http://localhost:8080"
+  timeout: 30s
+
+routes:
+  - path: "/api/v1/premium/*"
+    method: "GET"
+    price: "0.01"
+    settlement: "tab"
+    hint: "?q={query}&limit=50"              # free-form hint for agents
+
+  - path: "/api/v1/report"
+    method: "POST"
+    price: "5.00"
+    settlement: "direct"
+    hint: '{"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD"}'
+
+  - path: "/api/v1/health"
+    free: true
+
+default_action: "passthrough"
+
+global_allowlist: []
+
+rate_limits:
+  per_agent: "1000/min"
+  verification: "100/s"
+
+fail_mode: "closed"
+
+log:
+  level: "info"
+  format: "json"
+
+# Optional: register this gate in the Pay discovery catalog.
+# Agents find your API via `pay discover`.
+# Remove this block or set discoverable: false to stay unlisted.
+discovery:
+  discoverable: true
+  base_url: "https://api.example.com"    # public URL of this gate
+  name: "My API"                         # max 60 chars
+  description: "Short description"       # max 200 chars
+  keywords: ["keyword1", "keyword2"]     # max 10, each max 30 chars
+  category: "data"                       # e.g. data, ai, media, compute
+  docs_url: "https://api.example.com/docs" # optional — OpenAPI, docs page, etc.
