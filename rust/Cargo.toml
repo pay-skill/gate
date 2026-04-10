@@ -8,6 +8,7 @@ repository = "https://github.com/pay-skill/gate"
 homepage = "https://pay-skill.com/docs/gate/"
 keywords = ["x402", "payment", "gateway", "proxy", "usdc"]
 categories = ["web-programming::http-server", "command-line-utilities"]
+include = ["src/**/*", "Cargo.toml", "pay-gate.example.yaml"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
