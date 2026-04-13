@@ -73,7 +73,7 @@ pub async fn handle_request(
                 Some(sig) => {
                     handle_verification(
                         state, sig, &final_price, final_settlement, req, &request_url,
-                        route.description.as_deref(), route.mime_type.as_deref(),
+                        (route.description.as_deref(), route.mime_type.as_deref()),
                     ).await
                 }
             }
@@ -120,16 +120,16 @@ async fn resolve_price(
     }
 }
 
-async fn handle_verification(
+async fn handle_verification<'a>(
     state: &GateState,
     payment_sig: &str,
     price: &str,
     settlement: Settlement,
     req: &Request<hyper::body::Incoming>,
     request_url: &str,
-    description: Option<&str>,
-    mime_type: Option<&str>,
+    meta: (Option<&'a str>, Option<&'a str>),
 ) -> Result<GateDecision, GateError> {
+    let (description, mime_type) = meta;
     let amount = config::price_to_micro_usdc(price);
 
     if state.mode == GateMode::Mock {

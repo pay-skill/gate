@@ -57,22 +57,22 @@ pub async fn handle_check(
         RouteMatch::Paid { route, price, settlement } => {
             handle_paid_check(
                 state, &price, settlement, payment_sig, req, original_uri_raw,
-                route.description.as_deref(), route.mime_type.as_deref(),
+                (route.description.as_deref(), route.mime_type.as_deref()),
             ).await
         }
     }
 }
 
-async fn handle_paid_check(
+async fn handle_paid_check<'a>(
     state: &GateState,
     price: &str,
     settlement: Settlement,
     payment_sig: Option<&str>,
     req: &Request<hyper::body::Incoming>,
     original_uri: &str,
-    description: Option<&str>,
-    mime_type: Option<&str>,
+    meta: (Option<&'a str>, Option<&'a str>),
 ) -> Response<Full<Bytes>> {
+    let (description, mime_type) = meta;
     let accept = req.headers().get("accept").and_then(|v| v.to_str().ok());
     let amount = config::price_to_micro_usdc(price);
 
