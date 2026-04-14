@@ -70,12 +70,17 @@ export async function sendHeartbeat(env: Env): Promise<void> {
 function buildRoutes(routes: RouteConfig[]): HeartbeatRoute[] {
   return routes
     .filter((r) => !r.free)
-    .map((r) => ({
-      path: r.path,
-      method: r.method || "*",
-      price: r.price,
-      settlement: r.settlement || (r.price ? autoSettlement(r.price) : "auto"),
-    }));
+    .map((r) => {
+      const infoMethod = r.info?.input?.type === "http" ? (r.info.input as { method?: string }).method : undefined;
+      const entry: HeartbeatRoute = {
+        path: r.route_template || r.path,
+        method: r.method || infoMethod || "GET",
+        price: r.price,
+        settlement: r.settlement || (r.price ? autoSettlement(r.price) : "auto"),
+      };
+      if (r.description) entry.description = r.description;
+      return entry;
+    });
 }
 
 function extractDomain(url: string): string | null {

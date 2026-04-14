@@ -33,6 +33,8 @@ struct HeartbeatRoute {
     method: String,
     price: Option<String>,
     settlement: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
 }
 
 fn build_payload(config: &Config, discovery: &DiscoveryConfig) -> Option<HeartbeatPayload> {
@@ -42,15 +44,25 @@ fn build_payload(config: &Config, discovery: &DiscoveryConfig) -> Option<Heartbe
         .routes
         .iter()
         .filter(|r| !r.free)
-        .map(|r| HeartbeatRoute {
-            path: r.path.clone(),
-            method: r.method.clone().unwrap_or_else(|| "*".to_string()),
-            price: r.price.clone(),
-            settlement: match r.settlement {
-                Some(Settlement::Direct) => "direct".to_string(),
-                Some(Settlement::Tab) => "tab".to_string(),
-                None => "auto".to_string(),
-            },
+        .map(|r| {
+            // Prefer method from info block, then route config, then GET
+            let info_method = r.info.as_ref()
+                .and_then(|i| i.get("input"))
+                .filter(|inp| inp.get("type").and_then(|t| t.as_str()) == Some("http"))
+                .and_then(|inp| inp.get("method"))
+                .and_then(|m| m.as_str())
+                .map(|s| s.to_string());
+            HeartbeatRoute {
+                path: r.route_template.clone().unwrap_or_else(|| r.path.clone()),
+                method: r.method.clone().or(info_method).unwrap_or_else(|| "GET".to_string()),
+                price: r.price.clone(),
+                settlement: match r.settlement {
+                    Some(Settlement::Direct) => "direct".to_string(),
+                    Some(Settlement::Tab) => "tab".to_string(),
+                    None => "auto".to_string(),
+                },
+                description: r.description.clone(),
+            }
         })
         .collect();
 

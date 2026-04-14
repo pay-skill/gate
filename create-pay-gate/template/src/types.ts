@@ -117,6 +117,7 @@ export interface HeartbeatRoute {
   method: string;
   price?: string;
   settlement: string;
+  description?: string;
 }
 
 /** x402 v2 top-level 402 response (base64-encoded in PAYMENT-REQUIRED header). */
