@@ -69,6 +69,7 @@ pub async fn handle_request(
                         description: route.description.as_deref(),
                         mime_type: route.mime_type.as_deref(),
                         info: route.info.as_ref(),
+                        route_template: route.route_template.as_deref(),
                     });
                     Ok(GateDecision::Respond(resp))
                 }
@@ -77,6 +78,7 @@ pub async fn handle_request(
                         state, sig, &final_price, final_settlement, req, &request_url,
                         (route.description.as_deref(), route.mime_type.as_deref()),
                         route.info.as_ref(),
+                        route.route_template.as_deref(),
                     ).await
                 }
             }
@@ -135,6 +137,7 @@ async fn handle_verification<'a>(
     request_url: &str,
     meta: (Option<&'a str>, Option<&'a str>),
     info: Option<&'a serde_json::Value>,
+    route_tmpl: Option<&'a str>,
 ) -> Result<GateDecision, GateError> {
     let (description, mime_type) = meta;
     let amount = config::price_to_micro_usdc(price);
@@ -187,6 +190,7 @@ async fn handle_verification<'a>(
                 reason: resp.invalid_reason.as_deref(),
                 request_url, chain_id: state.chain_id,
                 description, mime_type, info,
+                route_template: route_tmpl,
             });
             Ok(GateDecision::Respond(resp_402))
         }

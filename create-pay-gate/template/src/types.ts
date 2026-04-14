@@ -17,6 +17,8 @@ export interface RouteConfig {
   mime_type?: string;
   /** Bazaar info block — structured input/output description for agents. Replaces hint. */
   info?: BazaarInfo;
+  /** Route template with named path params (e.g. "/users/:id"). When set, used for matching instead of path. */
+  route_template?: string;
 }
 
 /** Bazaar info block — describes how to call and what to expect from an endpoint. */

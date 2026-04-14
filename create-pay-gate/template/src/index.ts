@@ -63,6 +63,7 @@ app.get("/.well-known/x402", async (c) => {
       if (r.description) entry.description = r.description;
       if (r.mime_type) entry.mimeType = r.mime_type;
       if (r.info) entry.info = r.info;
+      if (r.route_template) entry.routeTemplate = r.route_template;
       return entry;
     });
 
@@ -192,7 +193,7 @@ app.all("*", async (c) => {
 
   if (!paymentSig) {
     return make402Response(reqs, path, price, c.req.header("accept"),
-      undefined, match.route.description, match.route.mime_type, match.route.info);
+      undefined, match.route.description, match.route.mime_type, match.route.info, match.route.route_template);
   }
 
   // Verify payment with facilitator
@@ -210,7 +211,7 @@ app.all("*", async (c) => {
   // Verification failed
   if (!result.isValid) {
     return make402Response(reqs, path, price, c.req.header("accept"),
-      result.invalidReason, match.route.description, match.route.mime_type, match.route.info);
+      result.invalidReason, match.route.description, match.route.mime_type, match.route.info, match.route.route_template);
   }
 
   // Validate request against info block (post-payment, pre-proxy)
@@ -260,7 +261,7 @@ async function handlePaidRequest(
 
   if (!paymentSig) {
     return make402Response(reqs, requestUrl, match.price, accept,
-      undefined, match.route.description, match.route.mime_type, match.route.info);
+      undefined, match.route.description, match.route.mime_type, match.route.info, match.route.route_template);
   }
 
   const result = await verifyPayment(facUrl, paymentSig, reqs);
@@ -273,7 +274,7 @@ async function handlePaidRequest(
 
   if (!result.isValid) {
     return make402Response(reqs, requestUrl, match.price, accept,
-      result.invalidReason, match.route.description, match.route.mime_type, match.route.info);
+      result.invalidReason, match.route.description, match.route.mime_type, match.route.info, match.route.route_template);
   }
 
   // Validate query params from original URI (sidecar has no body access)

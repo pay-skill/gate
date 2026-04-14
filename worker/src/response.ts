@@ -17,13 +17,20 @@ export function buildPaymentRequired(
   description?: string,
   mimeType?: string,
   info?: BazaarInfo,
+  routeTemplate?: string,
 ): PaymentRequired {
   const resource: PaymentRequired["resource"] = { url: requestUrl };
   if (description) resource.description = description;
   if (mimeType) resource.mimeType = mimeType;
   const extensions: Record<string, unknown> = {};
-  if (info) {
-    extensions.bazaar = { info, schema: buildInfoSchema(info) };
+  if (info || routeTemplate) {
+    const bazaar: Record<string, unknown> = {};
+    if (info) {
+      bazaar.info = info;
+      bazaar.schema = buildInfoSchema(info);
+    }
+    if (routeTemplate) bazaar.routeTemplate = routeTemplate;
+    extensions.bazaar = bazaar;
   }
   return {
     x402Version: 2,
@@ -121,8 +128,9 @@ export function make402Response(
   description?: string,
   mimeType?: string,
   info?: BazaarInfo,
+  routeTemplate?: string,
 ): Response {
-  const pr = buildPaymentRequired(reqs, requestUrl, description, mimeType, info);
+  const pr = buildPaymentRequired(reqs, requestUrl, description, mimeType, info, routeTemplate);
   const header = buildPaymentRequiredHeader(pr);
 
   if (wantsHtml(accept)) {

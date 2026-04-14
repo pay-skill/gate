@@ -59,6 +59,7 @@ pub async fn handle_check(
                 state, &price, settlement, payment_sig, req, original_uri_raw,
                 (route.description.as_deref(), route.mime_type.as_deref()),
                 route.info.as_ref(),
+                route.route_template.as_deref(),
             ).await
         }
     }
@@ -74,6 +75,7 @@ async fn handle_paid_check<'a>(
     original_uri: &str,
     meta: (Option<&'a str>, Option<&'a str>),
     info: Option<&'a serde_json::Value>,
+    route_tmpl: Option<&'a str>,
 ) -> Response<Full<Bytes>> {
     let (description, mime_type) = meta;
     let accept = req.headers().get("accept").and_then(|v| v.to_str().ok());
@@ -87,6 +89,7 @@ async fn handle_paid_check<'a>(
             price_display: price, accept, reason: None,
             request_url: original_uri, chain_id: state.chain_id,
             description, mime_type, info,
+            route_template: route_tmpl,
         });
     };
 
@@ -122,6 +125,7 @@ async fn handle_paid_check<'a>(
             reason: result.invalid_reason.as_deref(),
             request_url: original_uri, chain_id: state.chain_id,
             description, mime_type, info,
+            route_template: route_tmpl,
         });
     }
 

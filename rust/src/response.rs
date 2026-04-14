@@ -72,6 +72,7 @@ pub struct Build402Params<'a> {
     pub description: Option<&'a str>,
     pub mime_type: Option<&'a str>,
     pub info: Option<&'a serde_json::Value>,
+    pub route_template: Option<&'a str>,
 }
 
 /// Build a 402 Payment Required response with v2 wire format.
@@ -97,9 +98,18 @@ pub fn build_402(p: &Build402Params<'_>) -> Response<Full<Bytes>> {
         })),
     };
 
-    let extensions = match p.info {
-        Some(info) => json!({ "bazaar": { "info": info, "schema": build_info_schema(info) } }),
-        None => json!({}),
+    let extensions = if p.info.is_some() || p.route_template.is_some() {
+        let mut bazaar = json!({});
+        if let Some(info) = p.info {
+            bazaar["info"] = info.clone();
+            bazaar["schema"] = build_info_schema(info);
+        }
+        if let Some(tmpl) = p.route_template {
+            bazaar["routeTemplate"] = json!(tmpl);
+        }
+        json!({ "bazaar": bazaar })
+    } else {
+        json!({})
     };
 
     let payment_required = PaymentRequired {
