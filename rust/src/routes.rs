@@ -138,7 +138,7 @@ mod tests {
                 path: "/health".to_string(),
                 method: None, price: None, settlement: None,
                 free: true, allowlist: vec![], price_endpoint: None,
-                description: None, mime_type: None, info: None,
+                description: None, mime_type: None, info: None, route_template: None,
             }],
             DefaultAction::Block,
         );
@@ -154,7 +154,7 @@ mod tests {
                 method: None, price: Some("0.01".to_string()),
                 settlement: Some(Settlement::Tab), free: false,
                 allowlist: vec![], price_endpoint: None,
-                description: None, mime_type: None, info: None,
+                description: None, mime_type: None, info: None, route_template: None,
             }],
             DefaultAction::Block,
         );
@@ -191,7 +191,7 @@ mod tests {
                 price: Some("5.00".to_string()),
                 settlement: Some(Settlement::Direct), free: false,
                 allowlist: vec![], price_endpoint: None,
-                description: None, mime_type: None, info: None,
+                description: None, mime_type: None, info: None, route_template: None,
             }],
             DefaultAction::Passthrough,
         );
