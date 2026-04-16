@@ -1,41 +1,29 @@
 /**
  * Live-facilitator acceptance test for pay-gate (P28-2.1).
  *
- * Unlike gate.test.ts (which uses a mock facilitator on :9091 for speed),
- * this test exercises the full real path against Base Sepolia:
+ * Exercises the full real path against Base Sepolia:
  *
- *     test wallet
- *         |
- *         |  wallet.request(gateUrl/api/v1/premium/data)
- *         v
- *     pay-gate (dev mode, :8405, acceptance/configs/live.yaml)
- *         |
- *         |  POST /verify
- *         v
- *     testnet.pay-skill.com/x402  (real facilitator)
- *         |
- *         |  tab + charge lookup against real PostgreSQL
- *         v
- *     pay-gate  ->  mock origin (:9090)
+ *     test wallet  --(wallet.openTab)-->  testnet.pay-skill.com/api/v1
+ *     test wallet  --(wallet.chargeTab)--> testnet.pay-skill.com/api/v1
+ *     test wallet  --(fetch + PAYMENT-SIGNATURE)-->  pay-gate (:8405)
+ *     pay-gate     --(POST /verify)-->  testnet.pay-skill.com/x402
+ *     pay-gate     -->  mock origin (:9090)
  *
- * Proves:
- *   - Gate serves 402 with the configured provider as payTo
- *   - Gate forwards PAYMENT-SIGNATURE to testnet.pay-skill.com/x402/verify
- *   - Facilitator validates a real tab_id + charge_id created via the
- *     server's /tabs and /tabs/{id}/charge endpoints
- *   - Gate proxies to the mock origin with X-Pay-* headers injected
+ * NOTE: We cannot use wallet.request() end-to-end because SDK 0.2.3 has
+ * two latent bugs that combine to make tab settlement impossible:
+ *   1. balance() divides the server's dollar-formatted string by 1M (sdk#86 fixed but not published)
+ *   2. parseTab reads raw.tab_id but list_tabs returns { id }, so settleViaTab
+ *      looks up /tabs/undefined/charge (same bug Python had — fixed in sdk#77, TS not yet)
+ *
+ * Instead we call openTab + chargeTab explicitly (both accept direct
+ * args, no listTabs), then construct the PAYMENT-SIGNATURE manually.
  *
  * Unlocks Q101-Q108 (PARTIAL -> YES) in spec/ACCEPTANCE_QUESTIONS.md.
- *
- * Requires PAYSKILL_TESTNET_KEY env var with a funded Base Sepolia
- * private key. Without it, the whole describe block is skipped so the
- * file can still be compiled + ignored locally without a testnet key.
- * CI should set the secret; see acceptance.yml for the bash preflight.
  */
 
 import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import { Wallet, type Tab } from "@pay-skill/sdk";
+import { Wallet } from "@pay-skill/sdk";
 
 const LIVE_GATE_PORT = parseInt(process.env["LIVE_GATE_PORT"] || "8405", 10);
 const LIVE_ORIGIN_PORT = parseInt(process.env["MOCK_ORIGIN_PORT"] || "9090", 10);
@@ -45,21 +33,13 @@ const LIVE_ORIGIN_URL = `http://localhost:${LIVE_ORIGIN_PORT}`;
 // Must match provider_address in acceptance/configs/live.yaml.
 const LIVE_PROVIDER_ADDRESS = "0x1111111111111111111111111111111111111111";
 
-// USDC amount requested from the server's /mint endpoint at startup.
 const MINT_AMOUNT_USDC = 100;
-
-// Tab sizing for the shared test wallet. Matches the gate route's
-// $0.01 price so max_charge_per_call sits right at the 402 amount.
 const TAB_AMOUNT_USD = 5;
 const TAB_MAX_CHARGE_USD = 0.01;
-
-// Balance floor under which we proactively recycle the tab.
-const STALE_TAB_FLOOR_USD = 1;
 
 const testnetKey = process.env["PAYSKILL_TESTNET_KEY"];
 const skip = !testnetKey;
 
-/** True if the error looks like a /mint 1/wallet/hour rate-limit response. */
 function isMintRateLimited(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return /rate.?limit|rate_limited|429|too many requests/i.test(msg);
@@ -70,73 +50,40 @@ describe(
   { skip },
   () => {
     let wallet: Wallet;
+    let tabId: string;
 
     before(async () => {
       wallet = new Wallet({ privateKey: testnetKey as string, testnet: true });
       console.log(`  wallet:   ${wallet.address}`);
       console.log(`  gate:     ${LIVE_GATE_URL}`);
-      console.log(`  origin:   ${LIVE_ORIGIN_URL}`);
       console.log(`  provider: ${LIVE_PROVIDER_ADDRESS}`);
 
-      // Fund the wallet. Server /mint is rate-limited to 1/wallet/hour;
-      // back-to-back CI runs will 429, which we treat as "already funded".
-      // We deliberately do NOT check wallet.balance() — SDK 0.2.3 has a
-      // latent bug where balance() divides a dollar-formatted string by
-      // 1_000_000 (see P28 plan SDK balance() parsing bug section).
+      // Fund. Swallow rate-limit (previous run already funded this hour).
       try {
-        const mintResult = await wallet.mint(MINT_AMOUNT_USDC);
-        console.log(`  mint tx:  ${mintResult.txHash}`);
+        const r = await wallet.mint(MINT_AMOUNT_USDC);
+        console.log(`  mint tx:  ${r.txHash}`);
       } catch (err) {
         if (!isMintRateLimited(err)) throw err;
         console.log(`  mint rate-limited -- funded by a previous run, proceeding`);
       }
 
-      // Pre-open (or reuse) the shared test tab. We can't let wallet.request()
-      // open it implicitly because SDK 0.2.3's settleViaTab() internally calls
-      // balance() before opening — and balance() has a latent bug where it
-      // divides the server's dollar-formatted balance_usdc string by 1_000_000,
-      // so even with 100 USDC on-chain the SDK sees "$0.0001" and throws
-      // PayInsufficientFundsError. openTab() doesn't call balance(), so we
-      // call it directly in the setup hook.
+      // Open a $5 tab. We accept leaking one tab per CI run because the
+      // SDK's listTabs() is broken (parseTab reads raw.tab_id but the
+      // server's list_tabs returns { id }). Tab auto-closes after 30 days.
+      // With 100 USDC from mint, we can open ~19 tabs before exhaustion;
+      // at 1 CI push/day that's ~19 days. Mint refills after 1 hour.
       //
-      // This also handles the per-run lifecycle: each run charges $0.01 against
-      // the shared tab (500 runs from a fresh $5 tab). When effectiveBalance
-      // drops below STALE_TAB_FLOOR_USD, we close it and open a fresh one.
-      // At 1 push/day this lasts more than a year; under CI backfill pressure
-      // it burns down faster. Tab state persists across CI runs because the
-      // wallet is shared via the PAYSKILL_TESTNET_KEY secret.
-      const existing = await wallet.listTabs();
-      let liveTab: Tab | undefined = existing.find(
-        (t) =>
-          t.provider.toLowerCase() === LIVE_PROVIDER_ADDRESS.toLowerCase() &&
-          t.status === "open",
+      // Once the SDK publishes the parseTab fix (tab_id → id fallback),
+      // the before() hook should listTabs, reuse an open tab, and only
+      // openTab when none exists. TODO: revisit after SDK 0.2.4.
+      console.log(`  opening $${TAB_AMOUNT_USD} tab with ${LIVE_PROVIDER_ADDRESS}`);
+      const tab = await wallet.openTab(
+        LIVE_PROVIDER_ADDRESS,
+        TAB_AMOUNT_USD,
+        TAB_MAX_CHARGE_USD,
       );
-
-      if (liveTab && liveTab.effectiveBalance < STALE_TAB_FLOOR_USD) {
-        console.log(
-          `  closing stale tab ${liveTab.id} (effectiveBalance $${liveTab.effectiveBalance.toFixed(2)})`,
-        );
-        await wallet.closeTab(liveTab.id);
-        liveTab = undefined;
-      }
-
-      if (!liveTab) {
-        console.log(
-          `  opening fresh $${TAB_AMOUNT_USD} tab with ${LIVE_PROVIDER_ADDRESS}`,
-        );
-        liveTab = await wallet.openTab(
-          LIVE_PROVIDER_ADDRESS,
-          TAB_AMOUNT_USD,
-          TAB_MAX_CHARGE_USD,
-        );
-        console.log(
-          `  opened tab ${liveTab.id} (balance $${liveTab.balanceRemaining.toFixed(2)})`,
-        );
-      } else {
-        console.log(
-          `  reusing tab ${liveTab.id} (effectiveBalance $${liveTab.effectiveBalance.toFixed(2)})`,
-        );
-      }
+      tabId = tab.id;
+      console.log(`  opened tab ${tabId}`);
     });
 
     it("unpaid request returns 402 with the configured provider as payTo", async () => {
@@ -157,34 +104,55 @@ describe(
       );
       assert.equal(offer["amount"], "10000"); // $0.01 micro-USDC
 
-      // Sanity-check that this gate really is pointed at the live testnet
-      // facilitator, not the mock on :9091 that test-rust uses.
       const extra = offer["extra"] as Record<string, unknown>;
       assert.equal(extra["settlement"], "tab");
       assert.equal(extra["facilitator"], "https://testnet.pay-skill.com/x402");
 
-      // Drain the body so the TCP connection returns to the pool.
-      await resp.text();
+      await resp.text(); // drain body
     });
 
     it("end-to-end tab-settled request against live facilitator", async () => {
-      // Clear origin recorder so we can assert exactly one request landed.
       await fetch(`${LIVE_ORIGIN_URL}/__test/clear`);
 
-      // wallet.request() runs the full x402 dance:
-      //   1. GET /api/v1/premium/data -> 402 from gate
-      //   2. SDK parses 402, lists /tabs, finds the pre-opened tab (see
-      //      before() — we have to open it explicitly to side-step the
-      //      SDK 0.2.3 balance() parsing bug)
-      //   3. SDK POSTs /tabs/{id}/charge, receives charge_id
-      //   4. SDK retries gate request with PAYMENT-SIGNATURE containing
-      //      { extensions: { pay: { settlement, tabId, chargeId } } }
-      //   5. Gate forwards the signature to testnet.pay-skill.com/x402/verify
-      //   6. Facilitator verify_tab() loads the tab, confirms status=open,
-      //      balance >= amount, and that tab_charges has the charge_id
-      //   7. Facilitator returns { isValid: true, payer }
-      //   8. Gate proxies to mock origin with X-Pay-* headers injected
-      const resp = await wallet.request(`${LIVE_GATE_URL}/api/v1/premium/data`);
+      // Step 1: get 402 from gate to extract paymentRequirements
+      const initial = await fetch(`${LIVE_GATE_URL}/api/v1/premium/data`);
+      assert.equal(initial.status, 402);
+      const prHeader = initial.headers.get("payment-required");
+      assert.ok(prHeader);
+      const decoded = JSON.parse(atob(prHeader)) as Record<string, unknown>;
+      const offer = (decoded["accepts"] as Record<string, unknown>[])[0]!;
+      await initial.text(); // drain
+
+      // Step 2: charge the tab via server API (SDK method works — takes explicit tabId)
+      const charge = await wallet.chargeTab(tabId, { micro: 10000 });
+      assert.ok(charge.chargeId, "chargeTab should return a chargeId");
+
+      // Step 3: construct PAYMENT-SIGNATURE manually (avoids SDK's broken settleViaTab)
+      const paymentPayload = {
+        x402Version: 2,
+        accepted: {
+          scheme: offer["scheme"],
+          network: offer["network"],
+          amount: offer["amount"],
+          payTo: offer["payTo"],
+        },
+        payload: {
+          authorization: { from: wallet.address },
+        },
+        extensions: {
+          pay: {
+            settlement: "tab",
+            tabId,
+            chargeId: charge.chargeId,
+          },
+        },
+      };
+      const sig = btoa(JSON.stringify(paymentPayload));
+
+      // Step 4: retry gate request with signed payment
+      const resp = await fetch(`${LIVE_GATE_URL}/api/v1/premium/data`, {
+        headers: { "PAYMENT-SIGNATURE": sig },
+      });
       assert.equal(
         resp.status,
         200,
@@ -199,12 +167,10 @@ describe(
       assert.equal(headers["x-pay-settlement"], "tab");
       assert.equal(headers["x-pay-amount"], "10000");
 
-      // PAYMENT-RESPONSE base64 -> { success, network, payer, ... }.
-      // payer must be the test wallet address, case-insensitive (server
-      // lowercases, SDK uses viem's EIP-55 checksum form).
-      const prHeader = resp.headers.get("payment-response");
-      assert.ok(prHeader, "Missing PAYMENT-RESPONSE header");
-      const settlement = JSON.parse(atob(prHeader)) as Record<string, unknown>;
+      // PAYMENT-RESPONSE: { success, network, payer }
+      const prResp = resp.headers.get("payment-response");
+      assert.ok(prResp, "Missing PAYMENT-RESPONSE header");
+      const settlement = JSON.parse(atob(prResp)) as Record<string, unknown>;
       assert.equal(settlement["success"], true);
       assert.match(settlement["network"] as string, /^eip155:\d+$/);
       assert.equal(
@@ -212,15 +178,13 @@ describe(
         wallet.address.toLowerCase(),
       );
 
-      // Confirm exactly one request landed on the origin.
+      // Origin should have received exactly one proxied request
       const recResp = await fetch(`${LIVE_ORIGIN_URL}/__test/requests`);
       const recorded = (await recResp.json()) as Array<{
         url: string;
         headers: Record<string, string | undefined>;
       }>;
-      const gated = recorded.filter(
-        (r) => r.url === "/api/v1/premium/data",
-      );
+      const gated = recorded.filter((r) => r.url === "/api/v1/premium/data");
       assert.equal(gated.length, 1, "Origin should see exactly one proxied request");
       assert.equal(gated[0]!.headers["x-pay-verified"], "true");
     });
@@ -234,9 +198,6 @@ describe(
       const body = (await resp.json()) as Record<string, unknown>;
       assert.equal(body["echo"], true);
 
-      // Free routes must not call the facilitator. We can't easily verify
-      // that side from a live server (it isn't a mock), but we can verify
-      // the origin received the request with no payment headers.
       const recResp = await fetch(`${LIVE_ORIGIN_URL}/__test/requests`);
       const recorded = (await recResp.json()) as Array<{
         url: string;
