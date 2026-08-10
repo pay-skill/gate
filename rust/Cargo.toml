@@ -26,7 +26,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive", "env"] }
-base64 = "0.22"
+base64 = "0.23"
 nonzero_ext = "0.3"
 
 [package.metadata.binstall]
